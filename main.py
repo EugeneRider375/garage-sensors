@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 import datetime
 
 app = FastAPI()
 
-# Глобальное хранилище последних данных
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Переменная для хранения последних данных
 latest_data = {
     "temperature": None,
     "humidity": None,
@@ -14,27 +15,26 @@ latest_data = {
     "water": None,
     "rssi": None,
     "snr": None,
-    "time": None
+    "time": None,
 }
 
-# Подключаем папку static
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="static")
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    return "<h1>Garage Sensor Project</h1>"
-
 @app.post("/api/sensor")
-async def receive_data(data: dict):
-    data["time"] = datetime.datetime.now().strftime("%H:%M:%S")
-    latest_data.update(data)
-    return {"status": "ok", "received": data}
+async def receive_data(request: Request):
+    global latest_data
+    try:
+        data = await request.json()
+        data["time"] = datetime.datetime.now().strftime("%H:%M:%S")
+        latest_data.update(data)
+        return {"status": "ok"}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
 
 @app.get("/api/data")
 async def get_data():
     return latest_data
 
 @app.get("/panel", response_class=HTMLResponse)
-async def show_panel(request: Request):
-    return templates.TemplateResponse("interface_panel.html", {"request": request, **latest_data})
+async def serve_panel():
+    with open("static/interface_panel.html", "r", encoding="utf-8") as f:
+        html = f.read()
+        return HTMLResponse(content=html)
