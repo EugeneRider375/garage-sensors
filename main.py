@@ -1,53 +1,52 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from datetime import datetime
 import os
 
 app = FastAPI()
-
-# === ПАПКА STATIC ===
 app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="static")
 
-# === ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ ДАННЫХ ===
-sensor_data = {
+# Хранилище последнего состояния
+latest_data = {
     "temperature": None,
     "humidity": None,
-    "motion": False,
+    "motion": "Нет",
     "water": None,
     "rssi": None,
     "snr": None,
-    "time": "--:--:--"
+    "time": "-"
 }
 
-# === ОБРАБОТЧИК ГЛАВНОЙ СТРАНИЦЫ ===
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return HTMLResponse("<h1>Garage Sensor Server</h1><p>Use <a href='/panel'>/panel</a> to view data.</p>")
+
 @app.get("/panel", response_class=HTMLResponse)
-async def get_panel():
-    file_path = os.path.join("static", "interface_panel.html")
-    with open(file_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content, status_code=200)
+async def get_panel(request: Request):
+    return templates.TemplateResponse("interface_panel.html", {
+        "request": request,
+        **latest_data,
+        "time": datetime.now().strftime("%H:%M:%S")
+    })
 
-# === ЭНДПОИНТ ДЛЯ ПОЛУЧЕНИЯ АКТУАЛЬНЫХ ДАННЫХ ===
-@app.get("/api/data")
-async def get_data():
-    return JSONResponse(content=sensor_data)
-
-# === ЭНДПОИНТ ДЛЯ ПОЛУЧЕНИЯ ДАННЫХ ОТ ESP32 ===
 @app.post("/api/sensor")
-async def post_sensor_data(request: Request):
+async def receive_sensor_data(data: dict):
     try:
-        payload = await request.json()
-
-        # Обновляем глобальные данные
-        sensor_data["temperature"] = payload.get("temperature")
-        sensor_data["humidity"] = payload.get("humidity")
-        sensor_data["motion"] = payload.get("motion")
-        sensor_data["water"] = payload.get("water")
-        sensor_data["rssi"] = payload.get("rssi")
-        sensor_data["snr"] = payload.get("snr")
-        sensor_data["time"] = datetime.now().strftime("%H:%M:%S")
-
-        return {"status": "ok", "received": sensor_data}
+        latest_data.update({
+            "temperature": data.get("temperature"),
+            "humidity": data.get("humidity"),
+            "motion": "Да" if data.get("motion") else "Нет",
+            "water": data.get("water"),
+            "rssi": data.get("rssi"),
+            "snr": data.get("snr"),
+        })
+        return {"status": "ok", "received": latest_data}
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
+
+@app.get("/api/data")
+async def get_latest_data():
+    return latest_data
