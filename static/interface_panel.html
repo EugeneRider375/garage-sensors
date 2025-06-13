@@ -1,1 +1,48 @@
-
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Мониторинг</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f7f7f7;
+            margin: 0;
+            padding: 2em;
+            display: flex;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 2em;
+            max-width: 400px;
+            width: 100%;
+        }
+        h2 {
+            text-align: center;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin: 0.5em 0;
+        }
+        .row b {
+            width: 45%;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📡 Мониторинг</h2>
+        <div class="row"><b>🌡️ Температура:</b> <span>{{ temperature }} °C</span></div>
+        <div class="row"><b>💧 Влажность:</b> <span>{{ humidity }} %</span></div>
+        <div class="row"><b>🚪 Движение:</b> <span>{{ motion }}</span></div>
+        <div class="row"><b>🌊 Вода:</b> <span>{{ water }}</span></div>
+        <div class="row"><b>📶 RSSI:</b> <span>{{ rssi }}</span></div>
+        <div class="row"><b><span style="opacity:0">---</span> SNR:</b> <span>{{ snr }}</span></div>
+        <div class="row"><b>⏱️ Время:</b> <span>{{ time }}</span></div>
+    </div>
+</body>
+</html>
