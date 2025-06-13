@@ -1,36 +1,53 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-import time
+from datetime import datetime
+import os
 
 app = FastAPI()
+
+# === ПАПКА STATIC ===
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-sensor_data = {}
+# === ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ ДАННЫХ ===
+sensor_data = {
+    "temperature": None,
+    "humidity": None,
+    "motion": False,
+    "water": None,
+    "rssi": None,
+    "snr": None,
+    "time": "--:--:--"
+}
 
-class SensorPayload(BaseModel):
-    temperature: float
-    humidity: float
-    motion: bool
-    water: int = 0
-    rssi: int = 0
-    snr: float = 0.0
-
-@app.post("/api/sensor")
-async def receive_sensor_data(payload: SensorPayload):
-    global sensor_data
-    sensor_data = payload.dict()
-    return {"status": "ok", "received": sensor_data}
-
+# === ОБРАБОТЧИК ГЛАВНОЙ СТРАНИЦЫ ===
 @app.get("/panel", response_class=HTMLResponse)
-async def panel():
-    return f"""
-    <html>
-        <head><title>Данные с датчиков</title></head>
-        <body>
-            <h1>Данные с датчиков</h1>
-            <pre>{sensor_data}</pre>
-        </body>
-    </html>
-    """
+async def get_panel():
+    file_path = os.path.join("static", "interface_panel.html")
+    with open(file_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content, status_code=200)
+
+# === ЭНДПОИНТ ДЛЯ ПОЛУЧЕНИЯ АКТУАЛЬНЫХ ДАННЫХ ===
+@app.get("/api/data")
+async def get_data():
+    return JSONResponse(content=sensor_data)
+
+# === ЭНДПОИНТ ДЛЯ ПОЛУЧЕНИЯ ДАННЫХ ОТ ESP32 ===
+@app.post("/api/sensor")
+async def post_sensor_data(request: Request):
+    try:
+        payload = await request.json()
+
+        # Обновляем глобальные данные
+        sensor_data["temperature"] = payload.get("temperature")
+        sensor_data["humidity"] = payload.get("humidity")
+        sensor_data["motion"] = payload.get("motion")
+        sensor_data["water"] = payload.get("water")
+        sensor_data["rssi"] = payload.get("rssi")
+        sensor_data["snr"] = payload.get("snr")
+        sensor_data["time"] = datetime.now().strftime("%H:%M:%S")
+
+        return {"status": "ok", "received": sensor_data}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
