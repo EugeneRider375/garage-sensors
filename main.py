@@ -1,11 +1,14 @@
+
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime
 
 app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-last_data = {
+latest_data = {
     "temperature": None,
     "humidity": None,
     "motion": None,
@@ -16,39 +19,30 @@ last_data = {
 }
 
 class SensorData(BaseModel):
-    temperature: float
-    humidity: float
-    motion: bool
-    water: int
-    rssi: int
-    snr: float
+    temperature: float | None = None
+    humidity: float | None = None
+    motion: bool | None = None
+    water: int | None = None
+    rssi: int | None = None
+    snr: float | None = None
 
 @app.post("/api/sensor")
 async def receive_sensor_data(data: SensorData):
-    last_data.update({
-        "temperature": data.temperature,
-        "humidity": data.humidity,
-        "motion": data.motion,
-        "water": data.water,
-        "rssi": data.rssi,
-        "snr": data.snr,
-        "time": datetime.now().strftime("%H:%M:%S")
-    })
-    return {"status": "ok"}
+    latest_data.update(data.dict())
+    latest_data["time"] = datetime.now().strftime("%H:%M:%S")
+    return {"message": "Data received"}
 
-@app.get("/", response_class=PlainTextResponse)
-async def show_data():
-    if last_data["temperature"] is None:
-        return "Нет данных"
-
-    m = "Да" if last_data["motion"] else "Нет"
-    return (
-        f"📡 Данные: "
-        f"T={last_data['temperature']}°C "
-        f"H={last_data['humidity']}% "
-        f"M={m} "
-        f"W={last_data['water']} "
-        f"RSSI={last_data['rssi']} "
-        f"SNR={last_data['snr']} "
-        f"🕒 {last_data['time']}"
-    )
+@app.get("/", response_class=HTMLResponse)
+async def get_data():
+    return f'''
+        <html><body>
+        <h2>Garage Sensor Data</h2>
+        <p><b>🌡️ Temp:</b> {latest_data["temperature"]} °C</p>
+        <p><b>💧 Hum:</b> {latest_data["humidity"]} %</p>
+        <p><b>🚪 Motion:</b> {"Да" if latest_data["motion"] else "Нет"}</p>
+        <p><b>🌊 Water:</b> {latest_data["water"]}</p>
+        <p><b>📶 RSSI:</b> {latest_data["rssi"]}</p>
+        <p><b>SNR:</b> {latest_data["snr"]}</p>
+        <p><b>⏱ Время:</b> {latest_data["time"]}</p>
+        </body></html>
+    '''
