@@ -1,6 +1,5 @@
-
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import datetime
 
@@ -74,7 +73,8 @@ async def get_panel():
     </html>
     """
     return HTMLResponse(content=html)
-    # ===== НАЧАЛО НОВОГО КОДА ДЛЯ РЕЛЕ =====
+
+# ===== НАЧАЛО НОВОГО КОДА ДЛЯ РЕЛЕ =====
 
 relay_state = {"state": "off"}
 
@@ -94,20 +94,20 @@ async def set_relay_state(request: Request):
 
 @app.get("/relay", response_class=HTMLResponse)
 async def relay_page():
-    html_content = """
+    html_content = f"""
     <html>
         <head><title>Relay Control</title></head>
         <body>
             <h1>Relay Control</h1>
-            <button onclick="fetch('/api/relay', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({state:'on'})})">Turn ON</button>
-            <button onclick="fetch('/api/relay', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({state:'off'})})">Turn OFF</button>
+            <button onclick="fetch('/api/relay', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{state:'on'}})}})">Turn ON</button>
+            <button onclick="fetch('/api/relay', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{state:'off'}})}})">Turn OFF</button>
             <p id='status'></p>
             <script>
-                async function updateStatus() {
+                async function updateStatus() {{
                     const res = await fetch('/api/relay');
                     const data = await res.json();
                     document.getElementById('status').innerText = 'Current state: ' + data.state;
-                }
+                }}
                 setInterval(updateStatus, 1000);
                 updateStatus();
             </script>
