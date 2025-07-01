@@ -62,7 +62,6 @@ async def get_panel():
     <html>
         <head>
             <meta charset="UTF-8">
-            <meta http-equiv="refresh" content="3">
             <style>
                 body {{
                     font-family: sans-serif;
