@@ -12,6 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Хранение последних данных с датчиков
 last_data = {
     "temperature": None,
     "humidity": None,
@@ -22,6 +23,10 @@ last_data = {
     "time": None,
 }
 
+# Состояние реле
+relay_state = {"state": "off"}
+
+# Получение данных с датчиков
 @app.post("/api/sensor")
 async def receive_sensor_data(data: dict):
     global last_data
@@ -29,10 +34,28 @@ async def receive_sensor_data(data: dict):
     last_data = data
     return {"message": "Data received"}
 
+# Получение текущих данных
 @app.get("/api/data")
 async def get_data():
     return last_data
 
+# Получение состояния реле
+@app.get("/api/relay")
+async def get_relay_state():
+    return JSONResponse(content=relay_state)
+
+# Изменение состояния реле
+@app.post("/api/relay")
+async def set_relay_state(request: Request):
+    data = await request.json()
+    state = data.get("state")
+    if state in ["on", "off"]:
+        relay_state["state"] = state
+        return JSONResponse(content={"status": "success", "new_state": state})
+    else:
+        return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
+
+# HTML-страница мониторинга + управление реле
 @app.get("/panel", response_class=HTMLResponse)
 async def get_panel():
     html = f"""
@@ -56,6 +79,11 @@ async def get_panel():
                 .item {{
                     margin: 10px 0;
                 }}
+                button {{
+                    margin-right: 10px;
+                    padding: 10px 20px;
+                    font-size: 14px;
+                }}
             </style>
         </head>
         <body>
@@ -65,55 +93,38 @@ async def get_panel():
                 <div class="item">💧 Влажность: {last_data["humidity"]} %</div>
                 <div class="item">🚶 Движение: {"Да" if last_data["motion"] else "Нет"}</div>
                 <div class="item">🌊 Вода: {last_data["water"]}</div>
-                <div class="item">📶 RSSI: {last_data["rssi"]}</div>
-                <div class="item">📡 SNR: {last_data["snr"]}</div>
+                <!-- Закомментированные LoRa параметры -->
+                <!-- <div class="item">📶 RSSI: {last_data["rssi"]}</div> -->
+                <!-- <div class="item">📡 SNR: {last_data["snr"]}</div> -->
                 <div class="item">⏰ Время: {last_data["time"]}</div>
+
+                <hr>
+
+                <h3>🖲️ Управление реле</h3>
+                <div class="item">Текущее состояние: {relay_state["state"]}</div>
+                <button onclick="setRelay('on')">Включить реле</button>
+                <button onclick="setRelay('off')">Выключить реле</button>
+                <p id="relayStatus"></p>
             </div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
 
-# ===== НАЧАЛО НОВОГО КОДА ДЛЯ РЕЛЕ =====
-
-relay_state = {"state": "off"}
-
-@app.get("/api/relay")
-async def get_relay_state():
-    return JSONResponse(content=relay_state)
-
-@app.post("/api/relay")
-async def set_relay_state(request: Request):
-    data = await request.json()
-    state = data.get("state")
-    if state in ["on", "off"]:
-        relay_state["state"] = state
-        return JSONResponse(content={"status": "success", "new_state": state})
-    else:
-        return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
-
-@app.get("/relay", response_class=HTMLResponse)
-async def relay_page():
-    html_content = f"""
-    <html>
-        <head><title>Relay Control</title></head>
-        <body>
-            <h1>Relay Control</h1>
-            <button onclick="fetch('/api/relay', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{state:'on'}})}})">Turn ON</button>
-            <button onclick="fetch('/api/relay', {{method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{state:'off'}})}})">Turn OFF</button>
-            <p id='status'></p>
             <script>
-                async function updateStatus() {{
-                    const res = await fetch('/api/relay');
-                    const data = await res.json();
-                    document.getElementById('status').innerText = 'Current state: ' + data.state;
+                async function setRelay(state) {{
+                    try {{
+                        const response = await fetch('/api/relay', {{
+                            method: 'POST',
+                            headers: {{
+                                'Content-Type': 'application/json'
+                            }},
+                            body: JSON.stringify({{state}})
+                        }});
+                        const result = await response.json();
+                        document.getElementById('relayStatus').innerText = 'Ответ: ' + JSON.stringify(result);
+                    }} catch (error) {{
+                        console.error('Ошибка:', error);
+                    }}
                 }}
-                setInterval(updateStatus, 1000);
-                updateStatus();
             </script>
         </body>
     </html>
     """
-    return HTMLResponse(content=html_content)
-
-# ===== КОНЕЦ НОВОГО КОДА =====
+    return HTMLResponse(content=html)
