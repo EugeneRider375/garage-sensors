@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import datetime
@@ -58,3 +58,7 @@ async def set_relay_state(request: Request):
 @app.get("/panel", response_class=HTMLResponse)
 async def get_panel_file():
     return FileResponse(os.path.join("static", "interface_panel.html"))
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return RedirectResponse(url="/panel")
