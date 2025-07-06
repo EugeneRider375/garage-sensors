@@ -1,1 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель мониторинга</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 500px;
+            margin: auto;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .item {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        @media (max-width: 600px) {
+            .card {
+                width: 100%;
+                padding: 15px;
+            }
+            .item {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>📡 Мониторинг</h2>
+        <div class="item">🌡️ Температура: <span id="temp">...</span> °C</div>
+        <div class="item">💧 Влажность: <span id="hum">...</span> %</div>
+        <div class="item">🚶 Движение: <span id="motion">...</span></div>
+        <div class="item">🌊 Вода: <span id="water">...</span></div>
+        <div class="item">⏰ Время: <span id="time">...</span></div>
+        <hr>
+        <h3>🖲️ Управление реле</h3>
+        <div class="item">Текущее состояние: <span id="relay">...</span></div>
+        <button onclick="setRelay('on')">Включить</button>
+        <button onclick="setRelay('off')">Выключить</button>
+        <p id="relayStatus"></p>
+    </div>
 
+    <script>
+        async function loadData() {
+            const res = await fetch('/api/data');
+            const data = await res.json();
+            document.getElementById('temp').innerText = data.temperature ?? '-';
+            document.getElementById('hum').innerText = data.humidity ?? '-';
+            document.getElementById('motion').innerText = data.motion ? 'Да' : 'Нет';
+            document.getElementById('water').innerText = data.water ?? '-';
+            document.getElementById('time').innerText = data.time ?? '-';
+        }
+
+        async function loadRelay() {
+            const res = await fetch('/api/relay');
+            const data = await res.json();
+            document.getElementById('relay').innerText = data.state ?? '?';
+        }
+
+        async function setRelay(state) {
+            try {
+                const res = await fetch('/api/relay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ state })
+                });
+                const result = await res.json();
+                document.getElementById('relayStatus').innerText = 'Ответ: ' + result.status;
+                loadRelay();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        loadData();
+        loadRelay();
+        setInterval(() => {
+            loadData();
+            loadRelay();
+        }, 5000);
+    </script>
+</body>
+</html>
