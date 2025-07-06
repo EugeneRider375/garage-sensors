@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
   <meta charset="UTF-8">
   <title>Вход</title>
 </head>
 <body>
-  <h2>Вход</h2>
-  <form action="/login" method="post">
-    <label>Логин: <input type="text" name="username" /></label><br><br>
-    <label>Пароль: <input type="password" name="password" /></label><br><br>
+  <h2>Авторизация</h2>
+  <form method="post" action="/login">
+    <input type="text" name="username" placeholder="Логин"><br><br>
+    <input type="password" name="password" placeholder="Пароль"><br><br>
     <button type="submit">Войти</button>
   </form>
 </body>
