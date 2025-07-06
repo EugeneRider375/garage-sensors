@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 import datetime
 import os
 
@@ -14,9 +15,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SessionMiddleware, secret_key="verysecretkey")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Хранение последних данных с датчиков
+# Данные с датчиков
 last_data = {
     "temperature": None,
     "humidity": None,
@@ -30,10 +33,33 @@ last_data = {
 # Состояние реле
 relay_state = {"state": "off"}
 
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    if request.session.get("user") == "admin":
+        return RedirectResponse(url="/panel")
+    return RedirectResponse(url="/login")
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_form():
+    return FileResponse("static/login.html")
+
+@app.post("/login", response_class=HTMLResponse)
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    if username == "admin" and password == "1234":
+        request.session["user"] = username
+        return RedirectResponse(url="/panel", status_code=302)
+    return HTMLResponse("<h3>Неверный логин или пароль</h3><a href='/login'>Попробовать снова</a>", status_code=401)
+
+@app.get("/panel", response_class=HTMLResponse)
+async def get_panel_file(request: Request):
+    if request.session.get("user") != "admin":
+        return RedirectResponse(url="/login")
+    return FileResponse(os.path.join("static", "interface_panel.html"))
+
 @app.post("/api/sensor")
 async def receive_sensor_data(data: dict):
-    global last_data
     data["time"] = datetime.datetime.now().strftime("%H:%M:%S")
+    global last_data
     last_data = data
     return {"message": "Data received"}
 
@@ -52,13 +78,4 @@ async def set_relay_state(request: Request):
     if state in ["on", "off"]:
         relay_state["state"] = state
         return JSONResponse(content={"status": "success", "new_state": state})
-    else:
-        return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
-
-@app.get("/panel", response_class=HTMLResponse)
-async def get_panel_file():
-    return FileResponse(os.path.join("static", "interface_panel.html"))
-
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    return RedirectResponse(url="/panel")
+    return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
