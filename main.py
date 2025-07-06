@@ -1,8 +1,9 @@
-
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import datetime
+import os
 
 app = FastAPI()
 
@@ -13,6 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Хранение последних данных с датчиков
 last_data = {
     "temperature": None,
     "humidity": None,
@@ -22,6 +26,9 @@ last_data = {
     "snr": None,
     "time": None,
 }
+
+# Состояние реле
+relay_state = {"state": "off"}
 
 @app.post("/api/sensor")
 async def receive_sensor_data(data: dict):
@@ -34,43 +41,20 @@ async def receive_sensor_data(data: dict):
 async def get_data():
     return last_data
 
+@app.get("/api/relay")
+async def get_relay_state():
+    return JSONResponse(content=relay_state)
+
+@app.post("/api/relay")
+async def set_relay_state(request: Request):
+    data = await request.json()
+    state = data.get("state")
+    if state in ["on", "off"]:
+        relay_state["state"] = state
+        return JSONResponse(content={"status": "success", "new_state": state})
+    else:
+        return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
+
 @app.get("/panel", response_class=HTMLResponse)
-async def get_panel():
-    html = f"""
-    <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta http-equiv="refresh" content="3">
-            <style>
-                body {{
-                    font-family: sans-serif;
-                    padding: 20px;
-                    background: #f9f9f9;
-                }}
-                .card {{
-                    background: white;
-                    border-radius: 10px;
-                    padding: 20px;
-                    max-width: 400px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                }}
-                .item {{
-                    margin: 10px 0;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h2>📡 Мониторинг</h2>
-                <div class="item">🌡️ Температура: {last_data["temperature"]} °C</div>
-                <div class="item">💧 Влажность: {last_data["humidity"]} %</div>
-                <div class="item">🚶 Движение: {"Да" if last_data["motion"] else "Нет"}</div>
-                <div class="item">🌊 Вода: {last_data["water"]}</div>
-                <div class="item">📶 RSSI: {last_data["rssi"]}</div>
-                <div class="item">📡 SNR: {last_data["snr"]}</div>
-                <div class="item">⏰ Время: {last_data["time"]}</div>
-            </div>
-        </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+async def get_panel_file():
+    return FileResponse(os.path.join("static", "interface_panel.html"))
