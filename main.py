@@ -42,11 +42,12 @@ SLOTS = {
     "slot4": empty_record(),
 }
 
-# алиасы: твои текущие deviceId -> нужный слот (чтобы прошивки не трогать)
+# алиасы: твои deviceId -> нужный слот (чтобы прошивки не трогать)
 DEVICE_SLOT_MAP = {
     "garage-1": "slot1",
     "garage-2": "slot2",
-    "esp32-local": "slot3",   # можно задать в прошивке ESP32 позже
+    "old-garage": "slot3",     # самый первый источник без deviceId (ESP32 HTTPClient)
+    "esp32-local": "slot3",    # если позже дашь ESP32 этот id
     # добавляй при необходимости
 }
 
@@ -71,17 +72,28 @@ def update_slot(slot_name: str, data: dict):
 # ===== API =====
 
 @app.post("/api/sensor")
-async def receive_sensor_data(data: dict):
+async def receive_sensor_data(request: Request, data: dict):
     """
     Совместимо со старым форматом.
-    Если deviceId = 'garage-1'/'garage-2'/... — используем алиас в нужный слот.
-    Если deviceId = 'slot1'..'slot4' — пишем прямо в этот слот.
-    Если deviceId нет — используем slot1.
+    Логика выбора слота:
+      1) Если data.deviceId в алиасах -> соответствующий слот.
+      2) Если data.deviceId = slot1..slot4 -> прямой слот.
+      3) Если deviceId нет:
+         - если User-Agent содержит 'esp32httpclient' -> считаем 'old-garage' -> slot3
+         - иначе по умолчанию slot1.
     """
+    # 1) нормализуем deviceId из тела
     device_raw = data.get("deviceId")
     device_id = str(device_raw).strip().lower() if device_raw is not None else ""
 
-    # алиас → слот
+    # 2) если deviceId не передан — попробуем узнать по User-Agent
+    if not device_id:
+        ua = (request.headers.get("user-agent") or "").lower()
+        if "esp32httpclient" in ua:
+            device_id = "old-garage"  # старый ESP32 с HTTPClient
+        # можно добавить другие распознавания при необходимости
+
+    # 3) алиас -> слот
     slot = DEVICE_SLOT_MAP.get(device_id)
     if not slot:
         # если уже приходит slot1..slot4 — используем как есть
