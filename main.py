@@ -14,10 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# статика и старая панель остаются как были
+# Статика и старая панель остаются как были
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ===== базовый шаблон записи =====
+# ===== Базовый шаблон записи =====
 def empty_record():
     return {
         "temperature": None,
@@ -30,8 +30,8 @@ def empty_record():
         "deviceId": None,
     }
 
-# ===== данные =====
-# одно «последнее вообще» — для /api/data и /panel (как раньше)
+# ===== Данные =====
+# Одно «последнее вообще» — для /api/data и /panel (как раньше)
 last_data = empty_record()
 
 # 4 слота (окна) для параллельных источников
@@ -42,18 +42,18 @@ SLOTS = {
     "slot4": empty_record(),
 }
 
-# алиасы: твои deviceId -> нужный слот (чтобы прошивки не трогать)
+# Алиасы: твои deviceId -> нужный слот (чтобы прошивки не трогать)
 DEVICE_SLOT_MAP = {
     "garage-1": "slot1",
     "garage-2": "slot2",
-    "old-garage": "slot3",     # самый первый источник без deviceId (ESP32 HTTPClient)
-    "esp32-local": "slot3",    # если позже дашь ESP32 этот id
+    "old-garage": "slot3",   # самый первый источник без deviceId (ESP32 HTTPClient)
+    "esp32-local": "slot3",  # можно задать в прошивке ESP32 позже
     # добавляй при необходимости
 }
 
 relay_state = {"state": "off"}
 
-# утилита: аккуратно обновить слот
+# Утилита: аккуратно обновить слот
 def update_slot(slot_name: str, data: dict):
     now = datetime.datetime.now().strftime("%H:%M:%S")
     rec = {
@@ -109,10 +109,10 @@ async def receive_sensor_data(request: Request, data: dict):
 
 @app.get("/api/data")
 async def get_data():
-    # старый эндпоинт — без изменений
+    # Старый эндпоинт — без изменений
     return last_data
 
-# НОВОЕ: все 4 слота разом
+# Новое: все 4 слота разом
 @app.get("/api/data_multi")
 async def get_data_multi():
     return SLOTS
@@ -131,7 +131,7 @@ async def set_relay_state(request: Request):
     else:
         return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
 
-# ===== аутентификация / страницы =====
+# ===== Аутентификация / страницы =====
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -159,17 +159,17 @@ async def get_panel(request: Request):
         return RedirectResponse(url="/")
     return FileResponse(os.path.join("static", "interface_panel.html"))
 
-# НОВОЕ: простая светлая страница с 4 карточками (без сложных шаблонов)
+# Новое: светлая французская панель 2×2 (адаптивная) — /panel_multi
 @app.get("/panel_multi", response_class=HTMLResponse)
 async def panel_multi(request: Request):
     if request.cookies.get("auth") != "true":
         return RedirectResponse(url="/")
     return HTMLResponse('''<!doctype html>
-<html lang="ru">
+<html lang="fr">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Garage Panel – Multi</title>
+  <title>Panneau Multi</title>
   <style>
     :root{
       --bg:#ffffff; --fg:#111111; --muted:#6b7280;
@@ -178,14 +178,24 @@ async def panel_multi(request: Request):
     }
     *{box-sizing:border-box} html,body{height:100%}
     body{margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial}
-    header{position:sticky; top:0; z-index:10; background:linear-gradient(#fff,rgba(255,255,255,.92));
-      border-bottom:1px solid var(--border); padding:14px 18px; display:flex; align-items:center; justify-content:space-between}
+    header{
+      position:sticky; top:0; z-index:10;
+      background:linear-gradient(#fff,rgba(255,255,255,.92));
+      border-bottom:1px solid var(--border);
+      padding:14px 18px; display:flex; align-items:center; justify-content:space-between
+    }
     h1{margin:0; font-size:18px; font-weight:650}
     .muted{color:var(--muted)}
     .wrap{max-width:1100px; margin:0 auto; padding:18px}
+
+    /* 2×2 sur desktop, 1 colonne sur mobile */
     .grid{display:grid; gap:16px; grid-template-columns: repeat(2, minmax(280px, 1fr))}
     @media (max-width: 840px){ .grid{grid-template-columns: 1fr} }
-    .card{background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:16px 16px 14px}
+
+    .card{
+      background:var(--card); border:1px solid var(--border); border-radius:16px;
+      box-shadow:var(--shadow); padding:16px 16px 14px
+    }
     .top{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px}
     .id{font-weight:700; font-size:16px}
     .time{opacity:.7}
@@ -193,24 +203,33 @@ async def panel_multi(request: Request):
     .row:first-of-type{border-top:none}
     .label{opacity:.85}
     .value{font-weight:600}
-    .chip{display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); font-size:12px; color:var(--muted); background:#fafafa}
+    .chip{display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px;
+      border:1px solid var(--border); font-size:12px; color:var(--muted); background:#fafafa}
     .dot{width:8px; height:8px; border-radius:50%}
     .ok  .dot{background:var(--ok)}
     .warn .dot{background:var(--warn)}
     .bad .dot{background:var(--bad)}
-    .pill{display:inline-block; padding:0 8px; border-radius:999px; border:1px solid var(--border); margin-left:8px; font-size:12px; color:var(--muted); background:#f8fafc}
+    .pill{display:inline-block; padding:0 8px; border-radius:999px; border:1px solid var(--border);
+      margin-left:8px; font-size:12px; color:var(--muted); background:#f8fafc}
     a.link{color:var(--accent); text-decoration:none} a.link:hover{text-decoration:underline}
   </style>
 </head>
 <body>
   <header>
-    <h1>Garage Panel — Multi</h1>
-    <div class="muted"><a class="link" href="/panel">классическая панель</a></div>
+    <h1>Panneau Multi</h1>
+    <div class="muted"><a class="link" href="/panel">ancienne version</a></div>
   </header>
   <div class="wrap"><div id="grid" class="grid"></div></div>
 
 <script>
 var order = ["slot1","slot2","slot3","slot4"];
+// Noms jolis pour les cartes :
+var slotNames = {
+  "slot1":"Garage-1",
+  "slot2":"Garage-2",
+  "slot3":"Maison-1",
+  "slot4":"Libre"
+};
 
 function clsForTemp(t){
   if (t==null) return "";
@@ -220,12 +239,12 @@ function clsForTemp(t){
 }
 function waterBadge(w){
   if (w==null) return "";
-  if (w >= 200) return '<span class="pill" style="color:#fff;background:#ef4444;border-color:transparent;">высоко</span>';
-  if (w >= 50)  return '<span class="pill" style="background:#fff3cd;border-color:#fde68a;">средне</span>';
-  return '<span class="pill">норма</span>';
+  if (w >= 200) return '<span class="pill" style="color:#fff;background:#ef4444;border-color:transparent;">haut</span>';
+  if (w >= 50)  return '<span class="pill" style="background:#fff3cd;border-color:#fde68a;">moyen</span>';
+  return '<span class="pill">normal</span>';
 }
 function fmt(v, unit){ return (v===null || v===undefined || v==="") ? "—" : (unit ? (v+' '+unit) : v); }
-function fmtBool(b){ return (b===null || b===undefined) ? "—" : (b ? "Да" : "Нет"); }
+function fmtBool(b){ return (b===null || b===undefined) ? "—" : (b ? "Oui" : "Non"); }
 
 function render(data){
   var grid = document.getElementById('grid');
@@ -237,16 +256,16 @@ function render(data){
 
     var html = '';
     html += '<div class="top">';
-    html += '  <div class="id">'+(d.deviceId || k)+'</div>';
+    html += '  <div class="id">'+(slotNames[k])+'</div>';
     html += '  <div class="time muted">'+(d.time || '')+'</div>';
     html += '</div>';
 
-    html += '<div class="row"><div class="label">Темп.</div><div class="value">'+fmt(d.temperature,'°C')+
-            ' <span class="chip '+tempClass+'"><span class="dot"></span><span class="muted">статус</span></span></div></div>';
+    html += '<div class="row"><div class="label">Température</div><div class="value">'+fmt(d.temperature,'°C')+
+            ' <span class="chip '+tempClass+'"><span class="dot"></span><span class="muted">statut</span></span></div></div>';
 
-    html += '<div class="row"><div class="label">Влажн.</div><div class="value">'+fmt(d.humidity,'%')+'</div></div>';
-    html += '<div class="row"><div class="label">Движение</div><div class="value">'+fmtBool(d.motion)+'</div></div>';
-    html += '<div class="row"><div class="label">Вода</div><div class="value">'+fmt(d.water)+ ' ' + waterBadge(d.water)+'</div></div>';
+    html += '<div class="row"><div class="label">Humidité</div><div class="value">'+fmt(d.humidity,'%')+'</div></div>';
+    html += '<div class="row"><div class="label">Mouvement</div><div class="value">'+fmtBool(d.motion)+'</div></div>';
+    html += '<div class="row"><div class="label">Eau</div><div class="value">'+fmt(d.water)+ ' ' + waterBadge(d.water)+'</div></div>';
 
     if (typeof d.rssi !== 'undefined'){
       html += '<div class="row"><div class="label">RSSI</div><div class="value">'+fmt(d.rssi)+'</div></div>';
