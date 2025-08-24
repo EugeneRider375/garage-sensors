@@ -14,9 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# статика и старая панель остаются как были
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ===== Базовый шаблон записи =====
+# ===== базовый шаблон записи =====
 def empty_record():
     return {
         "temperature": None,
@@ -29,11 +30,11 @@ def empty_record():
         "deviceId": None,
     }
 
-# ===== Данные =====
-# «Как раньше» — одно последнее состояние:
+# ===== данные =====
+# одно «последнее вообще» — для /api/data и /panel (как раньше)
 last_data = empty_record()
 
-# Новые 4 слота (окна) — на будущее сразу готовы:
+# 4 слота (окна) для параллельных источников
 SLOTS = {
     "slot1": empty_record(),
     "slot2": empty_record(),
@@ -41,9 +42,17 @@ SLOTS = {
     "slot4": empty_record(),
 }
 
+# алиасы: твои текущие deviceId -> нужный слот (чтобы прошивки не трогать)
+DEVICE_SLOT_MAP = {
+    "garage-1": "slot1",
+    "garage-2": "slot2",
+    "esp32-local": "slot3",   # можно задать в прошивке ESP32 позже
+    # добавляй при необходимости
+}
+
 relay_state = {"state": "off"}
 
-# Утилита: аккуратно обновить слот
+# утилита: аккуратно обновить слот
 def update_slot(slot_name: str, data: dict):
     now = datetime.datetime.now().strftime("%H:%M:%S")
     rec = {
@@ -65,24 +74,31 @@ def update_slot(slot_name: str, data: dict):
 async def receive_sensor_data(data: dict):
     """
     Совместимо со старым форматом.
-    Если пришёл deviceId = slot1|slot2|slot3|slot4 — пишем в соответствующий слот.
-    Если deviceId нет — пишем в slot1 (и в last_data, как раньше).
+    Если deviceId = 'garage-1'/'garage-2'/... — используем алиас в нужный слот.
+    Если deviceId = 'slot1'..'slot4' — пишем прямо в этот слот.
+    Если deviceId нет — используем slot1.
     """
-    device_id = str(data.get("deviceId") or "").strip().lower()
-    slot = device_id if device_id in SLOTS else "slot1"
+    device_raw = data.get("deviceId")
+    device_id = str(device_raw).strip().lower() if device_raw is not None else ""
 
-    # обновим соответствующий слот
+    # алиас → слот
+    slot = DEVICE_SLOT_MAP.get(device_id)
+    if not slot:
+        # если уже приходит slot1..slot4 — используем как есть
+        slot = device_id if device_id in SLOTS else "slot1"
+
+    # обновляем слот
     rec = update_slot(slot, data)
 
     # поведение «как раньше»: одно глобальное значение
     global last_data
-    last_data = dict(rec)  # копия, чтобы панель видела тот же формат
+    last_data = dict(rec)
 
     return {"message": "Data received", "slot": slot}
 
 @app.get("/api/data")
 async def get_data():
-    # Старый эндпоинт — без изменений
+    # старый эндпоинт — без изменений
     return last_data
 
 # НОВОЕ: все 4 слота разом
@@ -104,7 +120,7 @@ async def set_relay_state(request: Request):
     else:
         return JSONResponse(content={"status": "error", "message": "Invalid state"}, status_code=400)
 
-# ===== Аутентификация / Страницы =====
+# ===== аутентификация / страницы =====
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -132,12 +148,11 @@ async def get_panel(request: Request):
         return RedirectResponse(url="/")
     return FileResponse(os.path.join("static", "interface_panel.html"))
 
-# НОВОЕ: дополнительная страница с 4 «окнами» (ничего в статике менять не нужно)
+# НОВОЕ: простая страница с 4 карточками (не правим твою статику)
 @app.get("/panel_multi", response_class=HTMLResponse)
 async def panel_multi(request: Request):
     if request.cookies.get("auth") != "true":
         return RedirectResponse(url="/")
-    # Простая адаптивная сетка на 4 карточки
     return HTMLResponse("""
 <!doctype html>
 <html>
@@ -145,7 +160,7 @@ async def panel_multi(request: Request):
   <meta charset="utf-8" />
   <title>Garage Panel – Multi</title>
   <style>
-    body{font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin:0; background:#0b0d12; color:#e6eef7;}
+    body{font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; background:#0b0d12; color:#e6eef7;}
     header{padding:12px 16px; background:#0f131a; border-bottom:1px solid #1b2330;}
     h1{margin:0; font-size:18px;}
     .grid{display:grid; gap:16px; padding:16px; grid-template-columns: repeat(auto-fit, minmax(260px,1fr));}
